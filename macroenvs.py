@@ -4,11 +4,12 @@ import gym
 from gym import spaces
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 class GrowthModel(gym.Env):
     metadata = {'render_modes': ['None', 'Graph', 'Desc', 'Verbose']}
 
-    def __init__(self, time_periods=30, k0 = 2, beta=0.9, alpha=0.3, delta=0.2, sigma=1, render_mode=None, random_k0=False):
+    def __init__(self, time_periods=30, k0 = 2, beta=0.9, A=3, alpha=0.3, delta=0.2, sigma=1, render_mode=None, random_k0=False):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.time_periods = time_periods
         self.time = 0
@@ -49,7 +50,9 @@ class GrowthModel(gym.Env):
         self.cumulative_reward = 0
         self.history = pd.DataFrame(columns=['Consumption', 'Capital+1', 'Capital', 'Output'])
 
-    def reset(self, seed = None, return_info = False, options = None):
+    def reset(self, seed = None, options = None):
+        super().reset(seed=seed)
+
         reward_achieved = self.cumulative_reward
         self.cumulative_reward = 0
         self.time = 0
@@ -63,15 +66,12 @@ class GrowthModel(gym.Env):
         self.action_space = spaces.Box(low=0, high = self.available_output(self.k0), shape=(1,), dtype=np.float32)
         self.observation_space = spaces.Box(low=0, high = self.available_output(self.k0), shape=(1,), dtype=np.float32)
 
-        info = {'Reward': reward_achieved, 'History': history_achieved}
+        info = {'Cumulative Reward': reward_achieved, 'History': history_achieved}
         obs = np.array([self.k0], dtype=np.float32)
         self.k = self.k0
 
     #TODO: RENDER MODES
-        if return_info:
-            return obs, info
-
-        return obs
+        return obs, info
 
     def step(self, action):
         kprime = action[0]
@@ -92,9 +92,13 @@ class GrowthModel(gym.Env):
 
         self.time += 1
         done = self.time == self.time_periods
+        info = {'Reward': reward, 'Cumulative Reward':self.cumulative_reward, 'History': self.history}
+
+        return obs, reward, done, False, info
 
 
 
+from gym.utils.env_checker import check_env
 
 
 
