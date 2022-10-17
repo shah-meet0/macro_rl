@@ -9,7 +9,7 @@ import pandas as pd
 class GrowthModel(gym.Env):
     metadata = {'render_modes': ['None', 'Graph', 'Desc', 'Verbose']}
 
-    def __init__(self, time_periods=30, k0 = 2, beta=0.9, A=3, alpha=0.3, delta=0.2, sigma=1, render_mode=None, random_k0=False):
+    def __init__(self, time_periods=40, k0 = 2, beta=0.9, A=3, alpha=0.3, delta=0.2, sigma=1, render_mode=None, random_k0=False):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.time_periods = time_periods
         self.time = 0

@@ -69,7 +69,7 @@ class TD3:
         self.polyak = polyak
         self.replay_buffer = replay_buffer
 
-
+    @tf.function
     def train_actor(self, old_state_batch):
         with tf.GradientTape() as tape:
             actions = self.actor(old_state_batch, training=True)
@@ -78,16 +78,17 @@ class TD3:
         grad = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor_optimizer.apply_gradients(zip(grad, self.actor.trainable_variables))
 
+    @tf.function
     def train_critics(self, old_state_batch, action_batch, reward_batch, next_state_batch):
+        target_actions = self.target_actor(next_state_batch)
+        noise = np.clip(np.random.normal(0, 0.08, size=target_actions.shape), -0.5, 0.5)
+        target_actions = tf.clip_by_value(target_actions + noise, 0, self.env.action_space.high)  # Should be adjustable
+        target_q_1 = self.target_critic_1([next_state_batch, target_actions])
+        target_q_2 = self.target_critic_2([next_state_batch, target_actions])
         with tf.GradientTape(persistent=True) as tape:
-            target_actions = self.target_actor(next_state_batch)
-            noise = np.clip(np.random.normal(0, 2, size=target_actions.shape), -2, 2)
-            target_actions = tf.clip_by_value(target_actions + noise, 0, 40) # Should be adjustable
-            target_q_1 = self.target_critic_1([next_state_batch, target_actions])
-            target_q_2 = self.target_critic_2([next_state_batch, target_actions])
-            y  = reward_batch + self.gamma * tf.minimum(target_q_1, target_q_2)
-            pred_1 = self.critic_1([old_state_batch, action_batch])
-            pred_2 = self.critic_2([old_state_batch, action_batch])
+            y  = tf.add(reward_batch, self.gamma * tf.minimum(target_q_1, target_q_2))
+            pred_1 = self.critic_1([old_state_batch, action_batch], training=True)
+            pred_2 = self.critic_2([old_state_batch, action_batch], training=True)
             loss_1 = tf.reduce_mean(tf.square(y-pred_1))
             loss_2 = tf.reduce_mean(tf.square(y-pred_2))
 
@@ -101,8 +102,8 @@ class TD3:
     def execute(self):
         obs, info = self.env.reset()
         state = np.array([obs])
-        p = 50
-        J = 6
+        p = 4
+        J = 3
         d = 2
         done = False
         iteration = 0
@@ -111,8 +112,8 @@ class TD3:
                 iteration += 1
                 obs, info = self.env.reset()
                 state = np.array([obs])
-                final_cap = info['History']['Capital'][self.env.time_periods -2]
-                print(f'Episode {iteration} reward: {info["Cumulative Reward"]}, final_cap: {final_cap}')
+                # final_cap = info['History']['Capital'][self.env.time_periods -2]
+                # print(f'Episode {iteration} reward: {info["Cumulative Reward"]}, final_cap: {final_cap}')
 
             if t < 10000:
                 act = self.env.action_space.sample()
@@ -138,9 +139,13 @@ class TD3:
                             self.update_target(self.critic_1, self.target_critic_1)
                             self.update_target(self.critic_2, self.target_critic_2)
 
-        return self.actor, self.critic_1
+            if t > 0  and t % 1000 == 0:
+                print(f'T: {t}, Reward: {r}')
+                state = np.array([self.env.reset()[0]])
 
+        self.env.reset()
 
+    @tf.function
     def update_target(self, current, target):
         current_weights = current.weights
         target_weights = target.weights
@@ -151,7 +156,7 @@ class TD3:
 
     def policy(self, state): # might be a bit geared to current GrowthModel()
         action = self.actor(state)
-        action += np.random.normal(0, 2, size= action.shape)
+        action += np.random.normal(0, 0.5, size= action.shape)
         final_act = np.clip(action, self.env.action_space.low, self.env.action_space.high)
         return final_act
 
